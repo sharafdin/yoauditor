@@ -237,6 +237,16 @@ yoauditor/
 - Reduce scope: `--max-files 20`
 - Check Ollama logs for issues
 
+## Docs
+
+| Doc | Description |
+|-----|-------------|
+| [docs/DESIGN.md](docs/DESIGN.md) | Design patterns, architecture, data flow |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Full `.yoauditor.toml` reference |
+| [docs/CLI.md](docs/CLI.md) | Exhaustive CLI options and examples |
+| [docs/EXIT_CODES.md](docs/EXIT_CODES.md) | Exit codes 0 / 1 / 2 and CI usage |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local dev, tests, where to change what |
+
 ## License
 
 MIT License

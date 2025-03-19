@@ -67,7 +67,3 @@ cargo run --release -- --repo local --local ./path/to/repo
 - **Config reference:** [docs/CONFIGURATION.md](CONFIGURATION.md)
 - **CLI reference:** [docs/CLI.md](CLI.md)
 - **Exit codes:** [docs/EXIT_CODES.md](EXIT_CODES.md)
-
-## Contributing
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for branch workflow, style, and PR guidelines.
