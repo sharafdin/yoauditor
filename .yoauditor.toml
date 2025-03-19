@@ -1,0 +1,80 @@
+# Configuration file for yoauditor
+# Place this file as .yoauditor.toml in your project root
+
+[general]
+# Default output file for the audit report
+output = "yoaudit_report.md"
+
+# Enable verbose logging by default
+verbose = false
+
+# Number of concurrent file analyses
+concurrency = 4
+
+[model]
+# Ollama model to use for analysis
+# Works with any model - doesn't need tool-calling support in single-call mode
+name = "qwen3-coder:480b-cloud"
+
+# Ollama API endpoint
+ollama_url = "http://localhost:11434"
+
+# Temperature for LLM responses (0.0 - 1.0)
+temperature = 0.1
+
+# Request timeout in seconds (single-call mode can take 10+ min for larger repos)
+timeout_seconds = 900
+
+# Number of retries on failure
+retries = 3
+
+# Single-call mode
+# true = Read all files, send in ONE API call (NOT an agent - just bulk analysis)
+# false = Use tool-calling (TRUE AI AGENT - LLM calls tools to explore)
+single_call_mode = true
+
+[scanner]
+# Maximum number of files to analyze
+max_files = 100
+
+# Maximum lines per file chunk (for large files)
+max_chunk_lines = 4000
+
+# File extensions to include in analysis
+extensions = [
+    "rs", "py", "js", "ts", "jsx", "tsx",
+    "go", "java", "c", "cpp", "h", "hpp",
+    "cs", "rb", "php", "swift", "kt", "scala",
+    "vue", "svelte"
+]
+
+# Patterns to exclude from analysis
+excludes = [
+    ".git",
+    "target",
+    "node_modules",
+    "vendor",
+    "dist",
+    "build",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".idea",
+    ".vscode"
+]
+
+# Maximum file size in bytes (default: 1MB)
+max_file_size = 1048576
+
+[report]
+# Include code snippets in the report
+include_snippets = true
+
+# Include file summary sections
+include_summaries = true
+
+# Maximum lines for code snippets
+max_snippet_lines = 10
+
+# Group issues by file (true) or by severity (false)
+group_by_file = true
