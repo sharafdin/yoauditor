@@ -1,6 +1,6 @@
 [package]
 name = "yoauditor"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 authors = ["YoAuditor Team"]
 description = "LLM-powered code auditor for GitHub repos"
