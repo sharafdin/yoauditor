@@ -9,10 +9,10 @@ High-level design, patterns, and data flow. For contributors and the curious.
 YoAuditor is a **pipeline**: clone → scan → analyze → report. The “analyze” step is pluggable: either **single-call** (one big LLM request) or **tool-calling** (agent loop). Config and CLI are merged once; the rest of the app is stateless per run.
 
 ```
-  ┌─────────┐     ┌─────────┐     ┌──────────────┐     ┌─────────┐
-  │  Clone  │ ──▶│  Scan   │ ──▶│   Analyze    │ ──▶│ Report  │
-  │  Repo   │     │  Files  │     │ (LLM mode)   │     │ (MD/JSON)│
-  └─────────┘     └─────────┘     └──────────────┘     └─────────┘
+  ┌─────────┐     ┌─────────┐     ┌──────────────┐     ┌───────────┐
+  │  Clone  │ ──▶│  Scan   │ ──▶│   Analyze    │ ──▶│  Report   │
+  │  Repo   │     │  Files  │     │ (LLM mode)   │     │ (MD/JSON) │
+  └─────────┘     └─────────┘     └──────────────┘     └───────────┘
        │                │                    │                 │
        ▼                ▼                    ▼                 ▼
    repo::cloner    scanner::*           agent::*          report::*
