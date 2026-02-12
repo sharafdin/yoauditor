@@ -61,6 +61,26 @@ cargo build --release
 cargo install --path .
 ```
 
+## Docker
+
+```bash
+# Build the image
+docker build -t yoauditor .
+
+# Run (Ollama must be reachable; use host network or pass Ollama URL)
+docker run --rm yoauditor --repo https://github.com/owner/repo.git --ollama-url http://host.docker.internal:11434
+
+# With output mounted so you can read the report on the host
+docker run --rm -v "$(pwd)/out:/app/out" yoauditor \
+  --repo https://github.com/owner/repo.git \
+  --ollama-url http://host.docker.internal:11434 \
+  --output /app/out/yoaudit_report.md
+```
+
+On Linux, use `--network host` and `--ollama-url http://localhost:11434` if Ollama runs on the host.
+
+See **[docs/DOCKER.md](docs/DOCKER.md)** for more options and Docker Compose.
+
 ## Usage
 
 ### Basic Usage
@@ -246,6 +266,7 @@ yoauditor/
 | [docs/CLI.md](docs/CLI.md) | Exhaustive CLI options and examples |
 | [docs/EXIT_CODES.md](docs/EXIT_CODES.md) | Exit codes 0 / 1 / 2 and CI usage |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local dev, tests, where to change what |
+| [docs/DOCKER.md](docs/DOCKER.md) | Docker build, run, and compose |
 
 ## License
 

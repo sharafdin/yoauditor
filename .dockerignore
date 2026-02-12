@@ -1,0 +1,28 @@
+# Build output
+target/
+
+# Git
+.git/
+.gitignore
+
+# IDE and editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docs and reports (not needed in image)
+docs/
+*.md
+!README.md
+
+# Config and local data
+.yoauditor.toml
+yoaudit_report.md
+yoaudit_report.json
+code_audit_report.md
+
+# Misc
+Dockerfile
+.dockerignore
+*.log

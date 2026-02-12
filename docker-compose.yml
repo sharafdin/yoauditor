@@ -1,0 +1,22 @@
+# YoAuditor - Docker Compose
+#
+# Usage:
+#   docker compose run --rm yoauditor --repo https://github.com/owner/repo.git --ollama-url http://host.docker.internal:11434
+#
+# On Linux, use: --ollama-url http://host.docker.internal:11434 (requires Docker 20.10+)
+# or run with network_mode: host and --ollama-url http://localhost:11434
+
+services:
+  yoauditor:
+    build: .
+    image: yoauditor:latest
+    stdin_open: true
+    tty: true
+    # Mount a directory to get the report out (optional)
+    volumes:
+      - ./out:/app/out
+    # Default: show help. Override with run args.
+    command: ["--help"]
+    # Uncomment on Linux if Ollama runs on host and you want to use host network:
+    # network_mode: host
+    # Then use: docker compose run --rm yoauditor --repo URL --ollama-url http://localhost:11434

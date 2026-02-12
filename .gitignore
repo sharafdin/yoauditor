@@ -38,6 +38,9 @@ Thumbs.db
 yoaudit_report.md
 yoaudit_report.json
 
+# Docker output mount (reports from docker run -v ./out:/app/out)
+out/
+
 # Temporary cloned repositories
 /tmp/
 .tmp/
