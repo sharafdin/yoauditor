@@ -141,19 +141,19 @@ Options:
 │  1. Clone Repository                                      │
 │     └──> /tmp/repo_clone                                  │
 │                                                           │
-│  2. Scan Source Files (respects config)                    │
+│  2. Scan Source Files (respects config)                   │
 │     ├── extensions, excludes, max_file_size               │
 │     └── unified scanner used by both modes                │
 │                                                           │
 │  3. Analyze (choose one mode):                            │
 │                                                           │
 │     Single-call             Tool-calling (agentic)        │
-│     ┌──────────────┐       ┌──────────────────────┐      │
+│     ┌───────────────┐       ┌──────────────────────┐      │
 │     │ Read all files│       │ LLM calls tools:     │      │
 │     │ Send in ONE   │       │  list_files()        │      │
 │     │ API request   │       │  read_file()         │      │
 │     │ Parse issues  │       │  search_code()       │      │
-│     └──────────────┘       │  get_file_info()     │      │
+│     └───────────────┘       │  get_file_info()     │      │
 │                             │  report_issue()      │      │
 │                             │  finish_analysis()   │      │
 │                             └──────────────────────┘      │
