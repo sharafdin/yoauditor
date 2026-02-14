@@ -204,6 +204,27 @@ yoauditor --repo https://github.com/owner/repo.git --min-severity critical --for
 | 1    | Runtime error (connection, config, etc.) |
 | 2    | Issues found above `--fail-on` threshold |
 
+## Fixtures
+
+The **`fixtures/`** folder contains sample code with intentional issues (Python, JavaScript, Go, Rust) to test YoAuditor and compare models.
+
+```bash
+# Run auditor on fixtures
+yoauditor --repo local --local ./fixtures --output yoaudit_report.md
+
+# Compare local vs cloud models (named outputs)
+yoauditor --repo local --local ./fixtures --output qwen3-coder.yoaudit_report.md
+yoauditor --repo local --local ./fixtures --model llama3.2:latest --output llama3.2.yoaudit_report.md
+```
+
+| In fixtures | Purpose |
+|-------------|---------|
+| [EXPECTED_ISSUES.md](fixtures/EXPECTED_ISSUES.md) | Checklist of issues the auditor should find |
+| [AUDIT_RESULTS.md](fixtures/AUDIT_RESULTS.md) | Local (Llama) vs cloud (Qwen) model comparison |
+| Source files | Intentionally flawed code + `clean_example.py` (false-positive check) |
+
+See **[fixtures/README.md](fixtures/README.md)** for details.
+
 ## Project Structure
 
 ```
@@ -228,6 +249,7 @@ yoauditor/
 │   └── report/
 │       ├── mod.rs           # Module exports
 │       └── generator.rs     # Report generation
+├── fixtures/                # Test code with known issues (see fixtures/README.md)
 ├── Cargo.toml
 └── .yoauditor.toml
 ```
@@ -267,6 +289,7 @@ yoauditor/
 | [docs/EXIT_CODES.md](docs/EXIT_CODES.md) | Exit codes 0 / 1 / 2 and CI usage |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local dev, tests, where to change what |
 | [docs/DOCKER.md](docs/DOCKER.md) | Docker build, run, and compose |
+| [fixtures/README.md](fixtures/README.md) | Fixtures: test code and model comparison |
 
 ## License
 
