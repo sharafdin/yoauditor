@@ -22,8 +22,8 @@ ollama_url = "http://localhost:11434"
 # Temperature for LLM responses (0.0 - 1.0)
 temperature = 0.1
 
-# Request timeout in seconds (single-call mode can take 10+ min for larger repos)
-timeout_seconds = 900
+# Request timeout in seconds (single-call + large models may need 30+ min)
+timeout_seconds = 1800
 
 # Number of retries on failure
 retries = 3

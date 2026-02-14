@@ -122,7 +122,7 @@ fn default_temperature() -> f32 {
 }
 
 fn default_timeout() -> u64 {
-    900
+    1800 // 30 min; single-call with large models can exceed 900s
 }
 
 fn default_retries() -> usize {
