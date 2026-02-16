@@ -1,6 +1,3 @@
-# Intentionally clean(ish) - use to check for false positives.
-# Auditor should report little or nothing here.
-
 def safe_parse_int(s: str) -> int | None:
     try:
         return int(s)

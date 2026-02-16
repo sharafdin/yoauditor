@@ -224,8 +224,11 @@ pub struct ReportMetadata {
     pub analysis_date: DateTime<Utc>,
     /// Name of the LLM model used.
     pub model_used: String,
-    /// Number of files analyzed.
+    /// Total number of files scanned/analyzed (e.g. sent to the LLM).
     pub files_analyzed: usize,
+    /// Number of files that had at least one issue (when different from files_analyzed).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub files_with_issues: Option<usize>,
     /// Number of files that failed analysis.
     pub files_failed: usize,
     /// Total number of issues found.

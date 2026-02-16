@@ -18,6 +18,8 @@ Instead of a one-size-fits-all approach, YoAuditor gives you two ways to audit c
 
 This is similar to how Claude or GPT-4 use tools to interact with codebases!
 
+**→ See [docs/MODES.md](docs/MODES.md) for a full comparison of single-call vs agentic mode, when to use each, and how to switch.**
+
 ## Features
 
 - 🤖 **Agentic Analysis**: LLM autonomously explores and analyzes the codebase
@@ -283,6 +285,7 @@ yoauditor/
 
 | Doc | Description |
 |-----|-------------|
+| [docs/MODES.md](docs/MODES.md) | **Single-call vs agentic mode** — when to use each, how they work |
 | [docs/DESIGN.md](docs/DESIGN.md) | Design patterns, architecture, data flow |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Full `.yoauditor.toml` reference |
 | [docs/CLI.md](docs/CLI.md) | Exhaustive CLI options and examples |

@@ -55,6 +55,9 @@ fn generate_metadata_section(metadata: &ReportMetadata) -> String {
         "- **Files Analyzed:** {}\n",
         metadata.files_analyzed
     ));
+    if let Some(n) = metadata.files_with_issues {
+        section.push_str(&format!("- **Files with Issues:** {}\n", n));
+    }
     if metadata.files_failed > 0 {
         section.push_str(&format!("- **Files Failed:** {}\n", metadata.files_failed));
     }
@@ -344,6 +347,7 @@ mod tests {
             analysis_date: Utc::now(),
             model_used: "test-model".to_string(),
             files_analyzed: 10,
+            files_with_issues: None,
             files_failed: 0,
             total_issues: 5,
             duration_seconds: 30.0,
@@ -407,6 +411,7 @@ mod tests {
             analysis_date: Utc::now(),
             model_used: "test-model".to_string(),
             files_analyzed: 10,
+            files_with_issues: None,
             files_failed: 2,
             total_issues: 5,
             duration_seconds: 30.0,

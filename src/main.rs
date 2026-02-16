@@ -142,10 +142,10 @@ async fn run_audit(args: Args) -> Result<i32> {
         ollama_url: config.model.ollama_url.clone(),
         model_name: config.model.name.clone(),
         temperature: config.model.temperature,
-        max_iterations: 50,
+        max_iterations: 200,
         timeout_seconds: config.model.timeout_seconds,
         single_call_mode: config.model.single_call_mode,
-        max_context_messages: 10,
+        max_context_messages: 50,
     };
 
     let mut agent = agent::CodeAnalysisAgent::new(agent_config, repo_path.clone(), scan_config);
@@ -159,10 +159,10 @@ async fn run_audit(args: Args) -> Result<i32> {
         println!("   The AI agent will explore the repository using tools...\n");
     }
 
-    let reported_issues = agent.run_analysis().await?;
+    let analysis_result = agent.run_analysis().await?;
 
     // Step 4: Convert reported issues to our Issue format
-    let mut issues: Vec<Issue> = reported_issues
+    let mut issues: Vec<Issue> = analysis_result.issues
         .into_iter()
         .map(|ri| Issue {
             file_path: ri.file_path,
@@ -209,11 +209,17 @@ async fn run_audit(args: Args) -> Result<i32> {
         })
         .collect();
 
+    let files_with_issues = analyzed_files.len();
+    let total_files_analyzed = analysis_result
+        .total_files_analyzed
+        .unwrap_or(files_with_issues);
+
     let metadata = ReportMetadata {
         repo_url: repo_url.clone(),
         analysis_date: Utc::now(),
         model_used: config.model.name.clone(),
-        files_analyzed: analyzed_files.len(),
+        files_analyzed: total_files_analyzed,
+        files_with_issues: (total_files_analyzed != files_with_issues).then_some(files_with_issues),
         files_failed: 0,
         total_issues: summary.total,
         duration_seconds: duration,
@@ -242,6 +248,7 @@ async fn run_audit(args: Args) -> Result<i32> {
 
     // Print summary
     println!("\n📊 Analysis Summary:");
+    println!("   Files analyzed: {}", report.metadata.files_analyzed);
     println!("   Files with issues: {}", report.files.len());
     println!("   Total issues: {}", summary.total);
     println!(

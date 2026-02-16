@@ -33,10 +33,10 @@ impl Default for AgentConfig {
             ollama_url: "http://localhost:11434".to_string(),
             model_name: "llama3.2:latest".to_string(),
             temperature: 0.1,
-            max_iterations: 50,
+            max_iterations: 200,
             timeout_seconds: 300,
             single_call_mode: false,
-            max_context_messages: 10, // Keep last 10 tool results
+            max_context_messages: 50, // Keep last 50 messages for better file content retention
         }
     }
 }
@@ -102,6 +102,17 @@ pub struct CodeAnalysisAgent {
     messages: Vec<ChatMessage>,
     repo_root: PathBuf,
     scan_config: ScanConfig,
+    /// Tracks which files the agent has read (for agentic mode).
+    files_read: Vec<String>,
+    /// Tracks which files the agent has reported issues for.
+    files_reported: std::collections::HashSet<String>,
+}
+
+/// Result of running analysis: issues found and (when known) total files analyzed.
+pub struct AnalysisResult {
+    pub issues: Vec<ReportedIssue>,
+    /// Total files sent to the LLM (single-call mode). None in tool-calling mode.
+    pub total_files_analyzed: Option<usize>,
 }
 
 impl CodeAnalysisAgent {
@@ -125,11 +136,13 @@ impl CodeAnalysisAgent {
             messages: Vec::new(),
             repo_root: repo_root.clone(),
             scan_config,
+            files_read: Vec::new(),
+            files_reported: std::collections::HashSet::new(),
         }
     }
 
-    /// Run the analysis and return found issues.
-    pub async fn run_analysis(&mut self) -> Result<Vec<ReportedIssue>> {
+    /// Run the analysis and return found issues plus total files analyzed when known.
+    pub async fn run_analysis(&mut self) -> Result<AnalysisResult> {
         if self.config.single_call_mode {
             self.run_single_call_analysis().await
         } else {
@@ -138,33 +151,56 @@ impl CodeAnalysisAgent {
     }
 
     /// Single-call mode: Read all files, send in ONE API call
-    async fn run_single_call_analysis(&mut self) -> Result<Vec<ReportedIssue>> {
+    async fn run_single_call_analysis(&mut self) -> Result<AnalysisResult> {
         info!("Starting single-call analysis (efficient mode)");
 
         // Use the unified scanner
         let scanner = FileScanner::new(self.repo_root.clone(), self.scan_config.clone());
         let files = scanner.collect_files()?;
-        info!("Collected {} source files", files.len());
+        let total_files = files.len();
+        info!("Collected {} source files", total_files);
 
         if files.is_empty() {
             warn!("No source files found to analyze");
-            return Ok(vec![]);
+            return Ok(AnalysisResult {
+                issues: vec![],
+                total_files_analyzed: Some(0),
+            });
         }
 
         // Build the prompt with all file contents
         let mut prompt = String::new();
-        prompt.push_str("Analyze the following code files and report any issues.\n\n");
-        prompt.push_str("For each issue found, output it in this exact JSON format:\n");
-        prompt.push_str(r#"{"file_path": "path/to/file.rs", "line_number": 42, "severity": "high", "category": "security", "title": "Issue Title", "description": "Description", "suggestion": "How to fix"}"#);
-        prompt.push_str("\n\nOutput one JSON object per line for each issue. Only output JSON, no other text.\n\n");
-        prompt.push_str("=== FILES TO ANALYZE ===\n\n");
+        prompt.push_str(&format!(
+            "You are auditing a codebase with {} source files. Analyze EVERY file below for security vulnerabilities, bugs, performance issues, and code quality problems.\n\n",
+            files.len()
+        ));
+        prompt.push_str("For each issue found, output one JSON object per line in this exact format:\n");
+        prompt.push_str(r#"{"file_path": "path/to/file.rs", "line_number": 42, "severity": "high", "category": "security", "title": "SQL Injection in query builder", "description": "User input is concatenated directly into SQL query without parameterization, allowing an attacker to execute arbitrary SQL.", "suggestion": "Use parameterized queries or a query builder with bound parameters."}"#);
+        prompt.push_str("\n\n");
+        prompt.push_str("Requirements:\n");
+        prompt.push_str("- Analyze ALL files, not just a few\n");
+        prompt.push_str("- Use exact line numbers from the source code\n");
+        prompt.push_str("- severity must be one of: critical, high, medium, low\n");
+        prompt.push_str("- category must be one of: security, bug, performance, code-quality\n");
+        prompt.push_str("- title should be concise (under 10 words)\n");
+        prompt.push_str("- description should explain WHAT and WHY\n");
+        prompt.push_str("- suggestion should explain HOW to fix\n");
+        prompt.push_str("- Only report real issues you are confident about\n");
+        prompt.push_str("- Output ONLY JSON lines, no other text\n\n");
+        prompt.push_str(&format!("=== {} FILES TO ANALYZE ===\n\n", files.len()));
 
-        for (path, content) in &files {
-            prompt.push_str(&format!("### FILE: {}\n```\n{}\n```\n\n", path, content));
+        for (i, (path, content)) in files.iter().enumerate() {
+            prompt.push_str(&format!(
+                "--- FILE {}/{}: {} ---\n```\n{}\n```\n\n",
+                i + 1,
+                files.len(),
+                path,
+                content
+            ));
         }
 
         prompt.push_str("=== END OF FILES ===\n\n");
-        prompt.push_str("Now analyze and output issues as JSON (one per line):");
+        prompt.push_str("Now analyze every file above and output issues as JSON (one per line). Remember: analyze ALL files, use accurate line numbers, and only report real issues:");
 
         // Send single API call
         info!("Sending single API request with all files...");
@@ -174,9 +210,11 @@ impl CodeAnalysisAgent {
         let issues = self.parse_issues_from_response(&response);
         info!("Parsed {} issues from response", issues.len());
 
-        Ok(issues)
+        Ok(AnalysisResult {
+            issues,
+            total_files_analyzed: Some(total_files),
+        })
     }
-
 
     /// Send a simple prompt (no tools) and get response
     async fn send_simple_prompt(&self, prompt: &str) -> Result<String> {
@@ -267,7 +305,7 @@ impl CodeAnalysisAgent {
     }
 
     /// Tool-calling mode: LLM uses tools to explore repository
-    async fn run_tool_calling_analysis(&mut self) -> Result<Vec<ReportedIssue>> {
+    async fn run_tool_calling_analysis(&mut self) -> Result<AnalysisResult> {
         info!("Starting agentic code analysis (tool-calling mode)");
 
         // Initialize with system prompt
@@ -277,14 +315,26 @@ impl CodeAnalysisAgent {
             tool_calls: None,
         });
 
-        // Initial user message
+        // Initial user message — must be directive and clear
         self.messages.push(ChatMessage {
             role: "user".to_string(),
-            content: "Please analyze this repository for code issues. Start by exploring the file structure, then read and analyze the source code files. Report any bugs, security issues, performance problems, or code quality concerns you find. When you've finished analyzing all relevant files, call finish_analysis.".to_string(),
+            content: r#"Analyze this repository for code issues. Follow these steps exactly:
+
+1. Call list_files(".") to discover the project structure
+2. Call read_file for EACH source code file (skip docs, configs, tests, fixtures)
+3. After reading each file, IMMEDIATELY call report_issue for every bug, security vulnerability, performance problem, or code quality issue you find in that file. Do NOT wait until the end.
+4. After you have read and analyzed ALL source files and reported ALL issues, call finish_analysis
+
+IMPORTANT:
+- You MUST call report_issue for each issue. Do NOT just describe issues in text.
+- Call report_issue IMMEDIATELY after reading each file, before moving to the next file.
+- If you find no issues in a file, move to the next file.
+- Do NOT call finish_analysis until you have read ALL source files."#.to_string(),
             tool_calls: None,
         });
 
         // Agent loop
+        let mut consecutive_no_tool_calls = 0;
         for iteration in 0..self.config.max_iterations {
             debug!("Agent iteration {}", iteration + 1);
 
@@ -293,15 +343,52 @@ impl CodeAnalysisAgent {
 
             // Check if there are tool calls
             if let Some(tool_calls) = response.tool_calls {
+                consecutive_no_tool_calls = 0;
                 let mut should_finish = false;
 
-                for tool_call in tool_calls {
+                // Execute ALL tool calls in this batch, collect results
+                let mut tool_results: Vec<(String, String)> = Vec::new();
+                let mut just_read_file: Option<String> = None;
+
+                for tool_call in &tool_calls {
                     let tool_name = &tool_call.function.name;
 
                     if tool_name == "finish_analysis" {
-                        info!("Agent finished analysis");
+                        // Before finishing, check if there are unanalyzed files
+                        let unanalyzed: Vec<_> = self.files_read.iter()
+                            .filter(|f| !self.files_reported.contains(*f))
+                            .cloned()
+                            .collect();
+
+                        if !unanalyzed.is_empty() && self.tool_executor.get_issues().is_empty() {
+                            info!("Agent tried to finish but {} files unanalyzed — nudging", unanalyzed.len());
+                            tool_results.push((tool_name.clone(),
+                                format!("WAIT — you read {} files but reported 0 issues. Please go back and call report_issue for issues in: {}",
+                                    unanalyzed.len(), unanalyzed.join(", "))));
+                            continue;
+                        }
+
+                        let issues_count = self.tool_executor.get_issues().len();
+                        info!("Agent finished analysis with {} issues reported", issues_count);
                         should_finish = true;
                         break;
+                    }
+
+                    // Track read_file calls
+                    if tool_name == "read_file" {
+                        if let Some(path) = tool_call.function.arguments.get("path").and_then(|v| v.as_str()) {
+                            if !self.files_read.contains(&path.to_string()) {
+                                self.files_read.push(path.to_string());
+                            }
+                            just_read_file = Some(path.to_string());
+                        }
+                    }
+
+                    // Track report_issue calls
+                    if tool_name == "report_issue" {
+                        if let Some(fp) = tool_call.function.arguments.get("file_path").and_then(|v| v.as_str()) {
+                            self.files_reported.insert(fp.to_string());
+                        }
                     }
 
                     // Execute tool
@@ -313,57 +400,110 @@ impl CodeAnalysisAgent {
                     };
 
                     let result = self.tool_executor.execute(&call);
-
-                    // Add tool result to messages
-                    self.messages.push(ChatMessage {
-                        role: "tool".to_string(),
-                        content: if result.success {
-                            result.output
-                        } else {
-                            format!("Error: {}", result.error.unwrap_or_default())
-                        },
-                        tool_calls: None,
-                    });
-
-                    // Sliding window: prune old tool messages to save context
-                    self.prune_old_messages();
+                    let output = if result.success {
+                        result.output.clone()
+                    } else {
+                        format!("Error: {}", result.error.unwrap_or_default())
+                    };
 
                     info!("Tool {} executed", tool_name);
+                    tool_results.push((tool_name.clone(), output));
                 }
+
+                // Add all tool results to messages AFTER executing the batch
+                let reported_in_batch = tool_results.iter().any(|(name, _)| name == "report_issue");
+
+                for (tool_name, output) in &tool_results {
+                    // Truncate very large tool outputs to save context
+                    let truncated = if output.len() > 8000 {
+                        format!("{}... [truncated, {} bytes total]", &output[..8000], output.len())
+                    } else {
+                        output.clone()
+                    };
+
+                    // If this is a read_file result and the model didn't report issues in this batch,
+                    // append a nudge directly to the tool result (saves a message slot)
+                    let content = if tool_name == "read_file" && !reported_in_batch && !should_finish {
+                        if let Some(ref fp) = just_read_file {
+                            format!("[{}] {}\n\n⚠️ Now call report_issue for EACH issue in \"{}\" before reading the next file.", tool_name, truncated, fp)
+                        } else {
+                            format!("[{}] {}", tool_name, truncated)
+                        }
+                    } else {
+                        format!("[{}] {}", tool_name, truncated)
+                    };
+
+                    self.messages.push(ChatMessage {
+                        role: "tool".to_string(),
+                        content,
+                        tool_calls: None,
+                    });
+                }
+
+                // Prune ONCE after all results are added
+                self.prune_old_messages();
 
                 if should_finish {
                     break;
                 }
             } else {
+                consecutive_no_tool_calls += 1;
+
                 // No tool calls - LLM sent a text response
                 let content = response.content.to_lowercase();
                 if content.contains("complete")
                     || content.contains("finished")
                     || content.contains("done")
                 {
-                    info!("Agent indicated completion via text");
-                    break;
+                    let issues_count = self.tool_executor.get_issues().len();
+                    if issues_count > 0 {
+                        info!("Agent indicated completion via text with {} issues", issues_count);
+                        break;
+                    }
+                    // If no issues reported yet, nudge the model
+                    info!("Agent said done but reported 0 issues — nudging to use report_issue");
                 }
 
-                self.messages.push(ChatMessage {
-                    role: "assistant".to_string(),
-                    content: response.content,
-                    tool_calls: None,
-                });
+                // After 3 consecutive text-only responses, strongly redirect
+                let nudge = if consecutive_no_tool_calls >= 3 {
+                    "You are not using tools. You MUST call report_issue for each issue you find. Please read the next source file and call report_issue for any issues, or call finish_analysis if truly done."
+                } else if self.tool_executor.get_issues().is_empty() {
+                    "You have not reported any issues yet. Please call report_issue for each issue you found while reading files. Do NOT describe issues in text — use the report_issue tool. If you need to read more files, call read_file first."
+                } else {
+                    "Please continue analyzing files or call finish_analysis if you're done."
+                };
 
                 self.messages.push(ChatMessage {
                     role: "user".to_string(),
-                    content: "Please continue analyzing or call finish_analysis if you're done."
-                        .to_string(),
+                    content: nudge.to_string(),
                     tool_calls: None,
                 });
+
+                // Give up after too many text-only responses
+                if consecutive_no_tool_calls >= 5 {
+                    warn!("Agent sent 5 consecutive text responses without tool calls — stopping");
+                    break;
+                }
             }
         }
 
         let issues = self.tool_executor.get_issues().to_vec();
-        info!("Analysis complete. Found {} issues.", issues.len());
+        let files_read_count = self.files_read.len();
+        info!(
+            "Analysis complete. Read {} files, reported issues in {} files, {} total issues.",
+            files_read_count,
+            self.files_reported.len(),
+            issues.len()
+        );
 
-        Ok(issues)
+        Ok(AnalysisResult {
+            issues,
+            total_files_analyzed: if files_read_count > 0 {
+                Some(files_read_count)
+            } else {
+                None
+            },
+        })
     }
 
     /// Prune old tool messages to keep context small (sliding window).
@@ -450,40 +590,75 @@ impl CodeAnalysisAgent {
 }
 
 /// System prompt for single-call mode
-const SINGLE_CALL_SYSTEM_PROMPT: &str = r#"You are an expert code reviewer and security auditor. 
-Analyze the provided code files and identify issues.
-Output each issue as a JSON object on its own line.
-Only output valid JSON, no explanations or markdown."#;
+const SINGLE_CALL_SYSTEM_PROMPT: &str = r#"You are an expert code auditor specializing in security, bugs, and performance analysis.
+
+## Your Task
+Analyze EVERY provided source file. For each real issue found, output one JSON object per line. Output ONLY valid JSON lines — no markdown, no explanations, no commentary.
+
+## Severity Levels (use exactly these strings)
+- "critical": Exploitable vulnerabilities (SQLi, RCE, auth bypass, hardcoded secrets/keys, path traversal)
+- "high": Likely bugs or security risks that could cause data loss, crashes, or privilege issues (unwrap on user input, division by zero, SSRF, XSS, insecure deserialization)
+- "medium": Code that is fragile, error-prone, or has performance impact (N+1 queries, blocking I/O in loops, missing error handling, race conditions, unbounded growth)
+- "low": Code quality and maintainability concerns (dead code, poor naming, missing validation on non-critical paths, inefficient string operations)
+
+## Categories (use exactly these strings)
+- "security": Vulnerabilities, secrets, auth issues, injection, XSS, CSRF
+- "bug": Logic errors, crashes, panics, null/undefined risks, resource leaks
+- "performance": Inefficient algorithms, N+1, blocking I/O, memory waste
+- "code-quality": Maintainability, duplication, complexity, error handling
+
+## Rules
+1. Analyze EVERY file. Do not skip files even if they look simple.
+2. Use accurate line numbers. If unsure, use the best approximation.
+3. Do NOT report issues in test files, fixtures, or intentionally vulnerable demo code unless asked.
+4. Avoid false positives: only report issues you are confident about.
+5. Be specific: describe WHAT the issue is, WHY it matters, and HOW to fix it.
+6. One JSON object per line. No arrays, no wrapping.
+7. If a file has no issues, do not output anything for it."#;
 
 /// System prompt for tool-calling mode
-const AGENT_SYSTEM_PROMPT: &str = r#"You are an expert code reviewer and security auditor. Your task is to analyze a code repository for issues.
+const AGENT_SYSTEM_PROMPT: &str = r#"You are an expert code auditor specializing in security, bugs, and performance analysis. Your task is to thoroughly analyze a code repository.
 
 ## Available Tools
 
-You have access to tools to explore and analyze the codebase:
-- `list_files(directory)` - List files in a directory
-- `read_file(path)` - Read a source file's contents
-- `search_code(pattern)` - Search for code patterns
-- `get_file_info(path)` - Get file metadata
-- `report_issue(...)` - Report a found issue
-- `finish_analysis()` - Call when done
+- `list_files(directory)` — List files in a directory (start with root ".")
+- `read_file(path)` — Read a source file's full contents
+- `search_code(pattern)` — Search for patterns across the codebase (regex supported)
+- `get_file_info(path)` — Get file metadata (size, language, line count)
+- `report_issue(file_path, line_number, severity, category, title, description, suggestion)` — Report a found issue
+- `finish_analysis()` — Call when you have analyzed all files and reported all issues
 
 ## Your Process
 
-1. Start by listing files in the root directory
-2. Identify source code files to analyze
-3. Read and analyze each relevant source file
-4. For each issue found, call report_issue
-5. When finished, call finish_analysis
+1. Call `list_files(".")` to discover the project structure
+2. Identify ALL source code files (skip tests, fixtures, vendored/generated code)
+3. Read and analyze EACH source file thoroughly using `read_file`
+4. Use `search_code` to trace cross-file patterns (e.g. how user input flows, shared state)
+5. For each real issue, call `report_issue` with accurate details
+6. After analyzing ALL files, call `finish_analysis`
 
-## Issues to Look For
+## Severity Levels (use exactly these strings)
 
-- Bugs: Logic errors, null pointer risks, race conditions
-- Security: SQL injection, XSS, hardcoded secrets
-- Performance: Inefficient algorithms, memory issues
-- Code Quality: Duplicated code, complex functions
+- "critical": Exploitable vulnerabilities — SQLi, RCE, auth bypass, hardcoded secrets/keys, path traversal
+- "high": Likely bugs or security risks — unwrap on user input, division by zero, SSRF, XSS, insecure deserialization
+- "medium": Fragile or error-prone code — N+1 queries, blocking I/O in loops, missing error handling, race conditions, unbounded growth
+- "low": Maintainability concerns — dead code, poor naming, missing validation on non-critical paths
 
-Be thorough but focused. Report real issues with specific line numbers.
+## Categories (use exactly these strings)
+
+- "security": Vulnerabilities, secrets, auth issues, injection, XSS, CSRF
+- "bug": Logic errors, crashes, panics, null/undefined risks, resource leaks
+- "performance": Inefficient algorithms, N+1, blocking I/O, memory waste
+- "code-quality": Maintainability, duplication, complexity, error handling
+
+## Rules
+
+1. Be thorough: read and analyze EVERY source file, not just a few.
+2. Use accurate line numbers from the file content you read.
+3. Avoid false positives: only report issues you are confident about.
+4. Be specific: describe WHAT the issue is, WHY it matters, and HOW to fix it.
+5. Look for cross-file issues: how data flows between modules, shared mutable state, missing validation at boundaries.
+6. Do NOT report issues in test files or intentionally vulnerable fixtures.
 "#;
 
 #[cfg(test)]
