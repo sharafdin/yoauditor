@@ -45,7 +45,8 @@ extensions = [
     "rs", "py", "js", "ts", "jsx", "tsx",
     "go", "java", "c", "cpp", "h", "hpp",
     "cs", "rb", "php", "swift", "kt", "scala",
-    "vue", "svelte"
+    "vue", "svelte",
+    "sh", "sql", "lua", "dart", "ex", "exs", "tf", "hcl", "zig"
 ]
 
 # Patterns to exclude from analysis

@@ -181,6 +181,7 @@ fn default_extensions() -> Vec<String> {
     vec![
         "rs", "py", "js", "ts", "jsx", "tsx", "go", "java", "c", "cpp", "h", "hpp", "cs", "rb",
         "php", "swift", "kt", "scala", "vue", "svelte",
+        "sh", "sql", "lua", "dart", "ex", "exs", "tf", "hcl", "zig",
     ]
     .into_iter()
     .map(String::from)

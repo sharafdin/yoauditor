@@ -69,7 +69,7 @@ single_call_mode = true
 | `excludes`       | list     | (see below) | Directory/file names to exclude (e.g. `node_modules`). |
 | `max_file_size`  | number   | `1048576` (1 MiB) | Max file size in bytes; larger files are skipped. |
 
-**Default extensions:** `rs`, `py`, `js`, `ts`, `jsx`, `tsx`, `go`, `java`, `c`, `cpp`, `h`, `hpp`, `cs`, `rb`, `php`, `swift`, `kt`, `scala`, `vue`, `svelte`.
+**Default extensions:** `rs`, `py`, `js`, `ts`, `jsx`, `tsx`, `go`, `java`, `c`, `cpp`, `h`, `hpp`, `cs`, `rb`, `php`, `swift`, `kt`, `scala`, `vue`, `svelte`, `sh`, `sql`, `lua`, `dart`, `ex`, `exs`, `tf`, `hcl`, `zig`.
 
 **Default excludes:** `.git`, `target`, `node_modules`, `vendor`, `dist`, `build`, `__pycache__`, `.venv`, `venv`, `.idea`, `.vscode`.
 
